@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "minibacklot"
+version = "0.1.0"
+description = "Digital backdrops for miniature photography."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "MiniBacklot contributors" }]
+keywords = ["photography", "miniature", "backdrop", "touchscreen", "pygame"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics :: Viewers",
+]
+dependencies = [
+    "pygame-ce>=2.5",
+    "numpy>=1.26",
+    "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+# OpenCV is used for advanced processing (later phases) and as a fallback
+# loader for 16-bit RGB TIFFs. The headless build avoids pulling in Qt.
+opencv = ["opencv-python-headless>=4.8"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+minibacklot = "minibacklot.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/minibacklot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

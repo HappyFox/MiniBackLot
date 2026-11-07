@@ -299,3 +299,70 @@ def test_handle_drawn_even_when_panel_closed(closed_panel, pg_display):
         (panel.edge.rect.left + 6, panel.edge.rect.centery)
     )[:3] != (0, 0, 0)
     assert surf.get_at((100, 100))[:3] == (0, 0, 0)  # panel body not drawn
+
+
+# ----------------------------------------------------------------------
+# Tabs
+# ----------------------------------------------------------------------
+def tab_named(panel, name):
+    return next(b for b in panel.tab_buttons if b.label == name)
+
+
+def test_tabs_are_tab_widgets_sitting_on_the_page(panel_setup):
+    from minibacklot.ui.button import Tab
+
+    panel, _, _, _ = panel_setup
+    assert all(isinstance(b, Tab) for b in panel.tab_buttons)
+    assert all(b.rect.bottom == panel.content_rect.top for b in panel.tab_buttons)
+    assert all(b.rect.height >= 48 for b in panel.tab_buttons)
+
+
+def test_exactly_one_tab_selected(panel_setup):
+    panel, _, _, _ = panel_setup
+    assert [b.active for b in panel.tab_buttons] == [True, False]
+    tap(panel, tab_named(panel, "Color").rect.center)
+    assert [b.active for b in panel.tab_buttons] == [False, True]
+
+
+def test_tapping_selected_tab_does_nothing(panel_setup):
+    panel, _, _, _ = panel_setup
+    panel.scroll_by(80)
+    before = panel.scroll
+    tap(panel, tab_named(panel, "Light").rect.center)
+    assert panel.tab == "Light" and panel.scroll == before
+
+
+def test_tab_change_cancelled_by_dragging_off(panel_setup):
+    panel, _, _, _ = panel_setup
+    c = tab_named(panel, "Color").rect.center
+    panel.handle(ev(PointerKind.DOWN, c, pid="d"))
+    panel.handle(ev(PointerKind.MOVE, (c[0], c[1] + 300), pid="d"))
+    panel.handle(ev(PointerKind.UP, (c[0], c[1] + 300), pid="d"))
+    assert panel.tab == "Light"
+
+
+def test_each_tab_remembers_its_scroll(panel_setup):
+    panel, _, _, _ = panel_setup
+    panel.scroll_by(90)
+    light_scroll = panel.scroll
+    assert light_scroll > 0
+    tap(panel, tab_named(panel, "Color").rect.center)
+    assert panel.scroll == 0  # Color fits without scrolling
+    tap(panel, tab_named(panel, "Light").rect.center)
+    assert panel.scroll == light_scroll
+
+
+def test_selected_tab_joins_page_unselected_is_recessed(panel_setup, pg_display):
+    panel, _, theme, _ = panel_setup
+    surf = pygame.Surface((1280, 600))
+    panel.draw(surf, theme)
+    light, color = tab_named(panel, "Light"), tab_named(panel, "Color")
+    # Just above the tab bottom: selected tab is page-coloured (no edge), the
+    # other shows the baseline/border.
+    y = light.rect.bottom - 1
+    assert surf.get_at((light.rect.centerx, y))[:3] == theme.page_bg
+    assert surf.get_at((color.rect.centerx, y))[:3] == theme.button_border
+    # Body colours: selected matches the page, unselected is darker.
+    mid = light.rect.top + light.rect.height * 3 // 4
+    assert surf.get_at((light.rect.left + 8, mid))[:3] == theme.page_bg
+    assert surf.get_at((color.rect.left + 8, mid))[:3] == theme.tab_inactive_bg

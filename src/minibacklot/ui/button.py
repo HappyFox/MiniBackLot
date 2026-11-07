@@ -191,3 +191,48 @@ class EdgeHandle(Button):
             cx = rect.centerx + off * rect.width
             pts = [(cx - d * a, cy - b), (cx + d * a, cy), (cx - d * a, cy + b)]
             pygame.draw.lines(surface, theme.button_fg, False, pts, width)
+
+
+class Tab(Button):
+    """One tab of a tab bar.
+
+    The selected tab shares the content area's background and has no bottom
+    edge, so it reads as the front card joined to its page; it gets an accent
+    strip along the top. Unselected tabs are recessed and dimmer. Tapping the
+    selected tab does nothing.
+    """
+
+    def __init__(self, label: str, on_select: Callable[[], None], is_active: Callable[[], bool]) -> None:
+        super().__init__(label, on_select, is_active=is_active)
+
+    def pointer_up(self, ev: PointerEvent) -> None:
+        if self.active:
+            self.pointer_cancel()
+            return
+        super().pointer_up(ev)
+
+    def draw(self, surface: pygame.Surface, theme: Theme) -> None:
+        if not self.visible:
+            return
+        active = self.active
+        rect = self.rect
+        r = theme.px(theme.RADIUS)
+        w = max(1, theme.px(2))
+        if active:
+            bg = theme.tab_active_bg
+        else:
+            bg = theme.tab_pressed_bg if (self.pressed and self.inside) else theme.tab_inactive_bg
+        corners = {"border_top_left_radius": r, "border_top_right_radius": r}
+        pygame.draw.rect(surface, bg, rect, **corners)
+        pygame.draw.rect(surface, theme.button_border, rect, width=w, **corners)
+        if active:
+            # Open the bottom edge (and the bar's baseline) into the page below.
+            pygame.draw.rect(surface, bg, (rect.left + w, rect.bottom - w, rect.width - 2 * w, w))
+            strip = theme.px(4)
+            pygame.draw.rect(
+                surface, theme.button_active, (rect.left + r, rect.top + w, rect.width - 2 * r, strip),
+                border_radius=strip // 2,
+            )
+        fg = theme.header_fg if active else theme.tab_inactive_fg
+        text = theme.font(theme.FONT).render(self.label, True, fg)
+        surface.blit(text, text.get_rect(center=(rect.centerx, rect.centery + (theme.px(2) if active else 0))))

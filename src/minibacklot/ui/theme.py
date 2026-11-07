@@ -39,6 +39,12 @@ class Theme:
     value_default: Color = (150, 150, 158)
     value_changed: Color = (255, 205, 90)
     header_fg: Color = (255, 255, 255)
+    # Tab bar: the selected tab shares the page background.
+    page_bg: Color = (32, 32, 38)
+    tab_active_bg: Color = (32, 32, 38)
+    tab_inactive_bg: Color = (20, 20, 23)
+    tab_pressed_bg: Color = (44, 44, 52)
+    tab_inactive_fg: Color = (150, 150, 158)
     _fonts: dict[int, pygame.font.Font] = field(default_factory=dict, repr=False)
 
     # Logical sizes

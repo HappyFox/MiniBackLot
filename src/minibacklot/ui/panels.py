@@ -7,7 +7,7 @@ from typing import Hashable
 import pygame
 
 from ..events.input_manager import PointerEvent, PointerKind
-from .button import Button, EdgeHandle
+from .button import Button, EdgeHandle, Tab
 from .slider import SliderRow
 from .theme import Theme
 from .widget import Widget
@@ -156,9 +156,10 @@ class SidePanel:
         self.tab = next(iter(tabs))
         self.header_buttons = header_buttons
         self.tab_buttons = [
-            Button(name, (lambda n=name: self.select_tab(n)), is_active=(lambda n=name: self.tab == n))
+            Tab(name, (lambda n=name: self.select_tab(n)), is_active=(lambda n=name: self.tab == n))
             for name in tabs
         ]
+        self._scroll_by_tab: dict[str, int] = {}  # each tab remembers its scroll
         self.long_press_ms = long_press_ms
         self.rect = pygame.Rect(0, 0, 0, 0)
         self.content_rect = pygame.Rect(0, 0, 0, 0)
@@ -205,8 +206,11 @@ class SidePanel:
         return self.header_buttons + self.tab_buttons
 
     def select_tab(self, name: str) -> None:
+        if name == self.tab or name not in self.rows_by_tab:
+            return
+        self._scroll_by_tab[self.tab] = self.scroll
         self.tab = name
-        self.scroll = 0
+        self.scroll = self._scroll_by_tab.get(name, 0)
         self._layout_rows()
 
     def layout(self, screen_size: tuple[int, int], theme: Theme, bottom: int | None = None) -> None:
@@ -230,12 +234,15 @@ class SidePanel:
         self._title_pos = (x0, y + bh // 2)
         y += bh + gap
 
-        # Tabs share the width equally.
+        # Tab bar: tabs share the width, sit directly on the page (no gap
+        # below), so the selected one joins the content area.
         n = len(self.tab_buttons)
-        tw = (inner_w - gap * (n - 1)) // max(1, n)
+        tab_gap, tab_h = theme.px(4), theme.px(56)
+        tw = (inner_w - tab_gap * (n - 1)) // max(1, n)
         for i, b in enumerate(self.tab_buttons):
-            b.rect = pygame.Rect(x0 + i * (tw + gap), y, tw, bh)
-        y += bh + gap
+            b.rect = pygame.Rect(x0 + i * (tw + tab_gap), y, tw, tab_h)
+        y += tab_h
+        self._tab_baseline = y
 
         self.content_rect = pygame.Rect(self.rect.left, y, width, max(0, self.rect.bottom - y))
         self._layout_rows()
@@ -345,6 +352,12 @@ class SidePanel:
         pygame.draw.line(surface, theme.button_border, self.rect.topleft, self.rect.bottomleft, max(1, theme.px(2)))
         title = theme.font(theme.TOAST_FONT).render(self.title, True, theme.header_fg)
         surface.blit(title, title.get_rect(midleft=self._title_pos))
+        # The page behind the selected tab's rows, then the tab bar baseline;
+        # the selected tab paints over the baseline to open into the page.
+        line_w = max(1, theme.px(2))
+        page = pygame.Rect(self.rect.left + line_w, self.content_rect.top, self.rect.width - line_w, self.content_rect.height)
+        pygame.draw.rect(surface, theme.page_bg, page)
+        pygame.draw.rect(surface, theme.button_border, (page.left, self.content_rect.top - line_w, page.width, line_w))
         for w in self._fixed_widgets():
             w.draw(surface, theme)
         old_clip = surface.get_clip()

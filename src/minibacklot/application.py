@@ -394,16 +394,21 @@ class Application:
             t = gs.type
             if t == GestureType.GESTURE_START:
                 v.end_rotation()
+                v.end_pan()
                 if v.can_edit:
                     v.push_history()
                 elif v.locked:
                     self._lock_toast(now)
             elif t == GestureType.GESTURE_END:
                 v.end_rotation()
+                v.end_pan()
                 self.smooth_rendered = False
                 self.dirty = True
             elif t == GestureType.PAN:
-                v.pan(*gs.delta)
+                if self.gestures.contact_count <= 1:  # one finger / mouse drag
+                    v.pan(*gs.delta, hitch_px=self.settings.touch.pan_edge_hitch_px * self.theme.scale)
+                else:  # pinch midpoint: no hitch (would fight the zoom anchor)
+                    v.pan(*gs.delta)
             elif t == GestureType.PINCH:
                 v.zoom(gs.pos, gs.scale)
             elif t == GestureType.ROTATE:

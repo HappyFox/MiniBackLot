@@ -19,6 +19,7 @@ from .transforms import (
     centered,
     fill_scale,
     fit_scale,
+    hitch_axis,
     normalize_angle,
     snap_rotation,
 )
@@ -65,6 +66,9 @@ class ViewController:
         # rotation, and the angle we last displayed (to detect outside changes).
         self._raw_rotation: float | None = None
         self._snap_shown: float | None = None
+        # Sticky edge "hitch" while panning: unsnapped centre and last shown centre.
+        self._raw_center: tuple[float, float] | None = None
+        self._hitch_shown: tuple[float, float] | None = None
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -177,11 +181,40 @@ class ViewController:
     # Continuous edits (pan/zoom/rotate) do not push history themselves;
     # callers push once at the start of a gesture.
     # ------------------------------------------------------------------
-    def pan(self, dx: float, dy: float) -> bool:
+    def pan(self, dx: float, dy: float, hitch_px: float = 0.0) -> bool:
+        """Translate the image.
+
+        With ``hitch_px > 0`` the image *sticks* when one of its edges comes
+        within ``hitch_px`` of the matching screen edge: it is held exactly
+        flush while the finger keeps moving, and released once the finger has
+        moved past. This makes edge alignment easy without preventing the
+        image from being moved off screen. Call :meth:`end_pan` when the
+        gesture ends.
+        """
         if not self.can_edit or (dx == 0 and dy == 0):
             return False
-        self._set(self.transform.translated(dx, dy), DisplayMode.FREE)
+        if hitch_px <= 0 or self.image_size is None:
+            self.end_pan()
+            self._set(self.transform.translated(dx, dy), DisplayMode.FREE)
+            return True
+        t = self.transform
+        cur = (t.cx, t.cy)
+        if self._raw_center is None or self._hitch_shown != cur:
+            self._raw_center = cur  # (re)start: moved by something else
+        rx, ry = self._raw_center[0] + dx, self._raw_center[1] + dy
+        self._raw_center = (rx, ry)
+        hx, hy = t.half_extents(self.image_size)
+        sw, sh = self.screen_size
+        shown = (hitch_axis(rx, hx, sw, hitch_px), hitch_axis(ry, hy, sh, hitch_px))
+        self._hitch_shown = shown
+        if shown == cur:
+            return False  # held at an edge
+        self._set(replace(t, cx=shown[0], cy=shown[1]), DisplayMode.FREE)
         return True
+
+    def end_pan(self) -> None:
+        self._raw_center = None
+        self._hitch_shown = None
 
     def zoom(self, anchor: Vec, factor: float) -> bool:
         if not self.can_edit:

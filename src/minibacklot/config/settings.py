@@ -42,6 +42,7 @@ class TouchSettings:
     rotation_threshold_deg: float = 8.0
     rotation_enabled: bool = True
     rotation_snap_deg: float = 4.0  # sticky snap to 0/90/180/270; 0 disables
+    pan_edge_hitch_px: float = 16.0  # sticky image-edge alignment (logical px); 0 disables
     mouse_suppress_ms: int = 500
     wheel_zoom_step: float = 1.1
 

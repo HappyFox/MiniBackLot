@@ -47,6 +47,24 @@ def snap_rotation(angle: float, threshold: float) -> float:
     return normalize_angle(m) if abs(angle - m) <= threshold else angle
 
 
+def hitch_axis(raw: float, half_extent: float, screen_len: float, hitch: float) -> float:
+    """Sticky edge alignment along one axis.
+
+    ``raw`` is the unsnapped screen position of the image centre. Returns the
+    centre position that puts an image edge exactly on the matching screen
+    edge (near edge on 0, far edge on ``screen_len``) when ``raw`` is within
+    ``hitch`` of it, otherwise ``raw`` unchanged.
+    """
+    if hitch <= 0:
+        return raw
+    best, best_d = raw, hitch
+    for target in (half_extent, screen_len - half_extent):
+        d = abs(raw - target)
+        if d <= best_d:
+            best, best_d = target, d
+    return best
+
+
 @dataclass(frozen=True)
 class ViewTransform:
     cx: float = 0.0  # screen x of the image center
@@ -152,6 +170,13 @@ class ViewTransform:
             cx=ncx + k * (self.cx - ocx),
             cy=ncy + k * (self.cy - ocy),
         )
+
+    def half_extents(self, image_size: Size) -> tuple[float, float]:
+        """Half width/height of the image's on-screen axis-aligned bounding box."""
+        r = math.radians(self.rotation)
+        c, s = abs(math.cos(r)), abs(math.sin(r))
+        w, h = image_size
+        return (self.scale * (w * c + h * s) / 2.0, self.scale * (w * s + h * c) / 2.0)
 
     def is_close(self, other: ViewTransform, tol: float = 1e-6) -> bool:
         return (

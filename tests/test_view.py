@@ -206,3 +206,105 @@ def test_snap_rotation_function():
     assert snap_rotation(-178.0, 4) == 180.0
     assert snap_rotation(179.0, 4) == 180.0
     assert snap_rotation(3.0, 0) == 3.0
+
+
+# ----------------------------------------------------------------------
+# Sticky edge hitch while panning
+# ----------------------------------------------------------------------
+# make(): 4000x3000 image fitted to 1920x1080 at scale 0.36 -> 1440x1080 on
+# screen, centred at (960, 540): left edge at 240, right edge at 1680.
+
+
+def drag(v, dx, dy=0.0, step=2.0, hitch=16.0):
+    n = max(1, round(max(abs(dx), abs(dy)) / step))
+    for _ in range(n):
+        v.pan(dx / n, dy / n, hitch_px=hitch)
+
+
+def left_edge(v):
+    hx, _ = v.transform.half_extents(IMG)
+    return v.transform.cx - hx
+
+
+def test_hitch_snaps_flush_then_releases():
+    v = make()
+    drag(v, -230)  # left edge 240 -> 10: within 16 px of the screen edge
+    assert left_edge(v) == pytest.approx(0.0)
+    drag(v, -20)  # raw -10: still held
+    assert left_edge(v) == pytest.approx(0.0)
+    drag(v, -10)  # raw -20: released, image moves off screen
+    assert left_edge(v) == pytest.approx(-20.0)
+    drag(v, 10)  # back to raw -10: caught again
+    assert left_edge(v) == pytest.approx(0.0)
+
+
+def test_hitch_on_far_edge_and_vertical_axis():
+    v = make()
+    v.zoom((960, 540), 2.0)  # 2880x2160: larger than the screen
+    hx, hy = v.transform.half_extents(IMG)
+    v.end_pan()
+    # Move so the bottom edge approaches the bottom of the screen.
+    bottom = v.transform.cy + hy
+    drag(v, 0, -(bottom - 1080) + 10)  # 10 px short of flush
+    assert v.transform.cy + hy == pytest.approx(1080.0)
+    right = v.transform.cx + hx
+    drag(v, -(right - 1920) - 12)  # right edge 12 px inside the screen
+    assert v.transform.cx + hx == pytest.approx(1920.0)
+
+
+def test_hitch_without_edges_nearby_is_plain_pan():
+    v = make()
+    v.zoom((960, 540), 1.1)  # edges away from every screen edge
+    v.end_pan()
+    x, y = v.transform.cx, v.transform.cy
+    drag(v, 37, 11)
+    assert (v.transform.cx, v.transform.cy) == pytest.approx((x + 37, y + 11))
+
+
+def test_hitch_holds_axis_already_flush():
+    """Fitted image fills the height: small vertical wobble stays flush."""
+    v = make()
+    drag(v, 37, 11)
+    assert (v.transform.cx, v.transform.cy) == pytest.approx((997, 540))
+
+
+def test_hitch_disabled():
+    v = make()
+    drag(v, -230, hitch=0)
+    assert left_edge(v) == pytest.approx(10.0)
+
+
+def test_hitch_uses_rotated_bounding_box():
+    v = make()
+    v.rotate((960, 540), 90)
+    v.end_pan()
+    hx, _ = v.transform.half_extents(IMG)  # rotated: width is 1080
+    assert hx == pytest.approx(540)
+    drag(v, -(960 - hx) + 8)
+    assert v.transform.cx - hx == pytest.approx(0.0)
+
+
+def test_hitch_restarts_after_outside_move():
+    v = make()
+    drag(v, -230)  # held at the edge with raw at -10
+    v.zoom((960, 540), 1.1)  # something else moved the image; edges now far from screen edges
+    before = (v.transform.cx, v.transform.cy)
+    v.pan(5, 0, hitch_px=16)
+    assert v.transform.cx == pytest.approx(before[0] + 5)  # no stale raw jump
+
+
+def test_hitch_blocked_when_locked():
+    v = make()
+    v.set_locked(True)
+    assert not v.pan(-230, 0, hitch_px=16)
+
+
+def test_hitch_axis_function():
+    from minibacklot.display.transforms import hitch_axis
+
+    assert hitch_axis(110, 100, 1000, 16) == 100  # near edge flush
+    assert hitch_axis(890, 100, 1000, 16) == 900  # far edge flush
+    assert hitch_axis(130, 100, 1000, 16) == 130  # too far: unchanged
+    assert hitch_axis(110, 100, 1000, 0) == 110  # disabled
+    # Both targets close (image ~ screen size): nearest wins.
+    assert hitch_axis(503, 495, 1000, 16) == 505

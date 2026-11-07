@@ -43,7 +43,7 @@ read, never written.
 | Gesture | Action |
 |---|---|
 | Tap | Show / hide the controls |
-| One-finger drag | Pan |
+| One-finger drag | Pan (image edges briefly stick flush to the screen edges) |
 | Two-finger pinch | Zoom around the point between your fingers |
 | Two-finger twist | Rotate (engages after ~8° so pinching doesn't wobble; gently snaps to 0°/90°/180°/270°) |
 | Double-tap | Fit the image again (keeps rotation and flips) |
@@ -64,6 +64,13 @@ Rotation snapping is *sticky*: within ±4° of a right angle the image locks
 exactly onto 0°, 90°, 180° or 270°, and releases as soon as you twist past
 that window. Set `touch.rotation_snap_deg` to change the window, or to `0`
 to turn snapping off. Keyboard `[`/`]` always rotates in exact steps.
+
+Panning has a similar *edge hitch*: when an edge of the image comes within
+16 px of the matching screen edge, the image holds exactly flush while your
+finger travels on, then releases, so you can still move it off screen.
+This applies to one-finger and mouse drags. Two-finger gestures and
+keyboard panning are unaffected. Set `touch.pan_edge_hitch_px` (logical
+pixels) to adjust it, or `0` to turn it off.
 
 Controls hide themselves after 5 seconds without interaction, but never
 while a finger is on them or while the Adjust panel is open.
@@ -119,7 +126,8 @@ Settings are stored as JSON in `$XDG_CONFIG_HOME/minibacklot/settings.json`
 background colour, UI scale, auto-hide delays, default display mode, the
 current lighting adjustments and touch sensitivity (`touch.tap_slop`, `touch.long_press_ms`,
 `touch.double_tap_ms`, `touch.rotation_threshold_deg`,
-`touch.rotation_enabled`, `touch.rotation_snap_deg`, ...). Invalid or unknown entries are ignored.
+`touch.rotation_enabled`, `touch.rotation_snap_deg`,
+`touch.pan_edge_hitch_px`, ...). Invalid or unknown entries are ignored.
 
 ## Tests
 

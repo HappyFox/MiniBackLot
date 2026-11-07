@@ -136,3 +136,58 @@ def draw_reset_icon(surface: pygame.Surface, rect: pygame.Rect, color, theme: Th
     ax, ay = cx + r * math.cos(start), cy - r * math.sin(start)
     h = r * 0.55
     pygame.draw.polygon(surface, color, [(ax - h, ay - h * 0.1), (ax + h * 0.3, ay - h * 0.9), (ax + h * 0.35, ay + h * 0.6)])
+
+
+class EdgeHandle(Button):
+    """A tab on the screen edge with chevrons that opens/closes a side panel.
+
+    Tap to toggle, or swipe: left opens, right closes (the direction the
+    panel moves). Long-press shows the hint like any other button.
+    """
+
+    SWIPE_PX = 24  # logical px of horizontal travel that counts as a swipe
+
+    def __init__(self, on_toggle: Callable[[], None], is_open: Callable[[], bool], hint: str = "") -> None:
+        super().__init__("", on_toggle, hint=hint, is_active=is_open)
+        self._x0 = 0.0
+        self.swipe_px = self.SWIPE_PX
+
+    def pointer_down(self, ev: PointerEvent) -> bool:
+        self._x0 = ev.pos[0]
+        return super().pointer_down(ev)
+
+    def pointer_up(self, ev: PointerEvent) -> None:
+        dx = ev.pos[0] - self._x0
+        was_inside, long_pressed = self.inside, self.long_pressed
+        self.pointer_cancel()
+        if long_pressed:
+            return
+        if abs(dx) >= self.swipe_px:
+            if (dx < 0) != self.active:  # swipe left while closed / right while open
+                self.on_click()
+        elif was_inside:
+            self.on_click()
+
+    def draw(self, surface: pygame.Surface, theme: Theme) -> None:
+        if not self.visible:
+            return
+        r = theme.px(theme.RADIUS) * 2
+        bg = theme.button_pressed if self.pressed else (40, 40, 46)
+        rect = self.rect
+        tab = pygame.Surface(rect.size, pygame.SRCALPHA)
+        local = tab.get_rect()
+        pygame.draw.rect(tab, (*bg, 225), local, border_top_left_radius=r, border_bottom_left_radius=r)
+        pygame.draw.rect(
+            tab, (*theme.button_border, 255), local, width=max(1, theme.px(2)),
+            border_top_left_radius=r, border_bottom_left_radius=r,
+        )
+        surface.blit(tab, rect.topleft)
+        # Double chevron pointing where the panel will move: << to open, >> to close.
+        d = 1 if self.active else -1
+        a, b = rect.width * 0.12, rect.width * 0.22
+        width = max(2, theme.px(3))
+        cy = rect.centery
+        for off in (-0.13, 0.13):
+            cx = rect.centerx + off * rect.width
+            pts = [(cx - d * a, cy - b), (cx + d * a, cy), (cx - d * a, cy + b)]
+            pygame.draw.lines(surface, theme.button_fg, False, pts, width)

@@ -7,7 +7,7 @@ from typing import Hashable
 import pygame
 
 from ..events.input_manager import PointerEvent, PointerKind
-from .button import Button
+from .button import Button, EdgeHandle
 from .slider import SliderRow
 from .theme import Theme
 from .widget import Widget
@@ -140,7 +140,17 @@ class SidePanel:
         tabs: dict[str, list[SliderRow]],
         header_buttons: list[Button],
         long_press_ms: int = 600,
+        handle_hint: str = "",
     ) -> None:
+        self._visible = False
+        self._theme: Theme | None = None
+        self._screen = (0, 0)
+        # Chevron tab on the screen edge that opens/closes the panel. It is
+        # shown whenever the controls are (``handle_visible``), even while the
+        # panel itself is closed.
+        self.edge = EdgeHandle(self.toggle, lambda: self._visible, hint=handle_hint)
+        self.handle_visible = True
+        self.on_toggle = None  # optional callback after the panel opens/closes
         self.title = title
         self.rows_by_tab = tabs
         self.tab = next(iter(tabs))
@@ -150,17 +160,40 @@ class SidePanel:
             for name in tabs
         ]
         self.long_press_ms = long_press_ms
-        self.visible = False
         self.rect = pygame.Rect(0, 0, 0, 0)
         self.content_rect = pygame.Rect(0, 0, 0, 0)
         self.scroll = 0
         self.content_h = 0
-        self._theme: Theme | None = None
         self._title_pos = (0, 0)
         self._captures: dict[Hashable, object] = {}
         self._scroll_start: dict[Hashable, tuple[float, int, bool]] = {}
 
     # ------------------------------------------------------------------
+    @property
+    def visible(self) -> bool:
+        return self._visible
+
+    @visible.setter
+    def visible(self, value: bool) -> None:
+        self._visible = bool(value)
+        self._place_handle()
+
+    def toggle(self) -> None:
+        self.cancel_panel_widgets()
+        self.visible = not self._visible
+        if self.on_toggle:
+            self.on_toggle()
+
+    def _place_handle(self) -> None:
+        theme = self._theme
+        if theme is None:
+            return
+        w, h = theme.px(52), theme.px(120)
+        edge_x = self.rect.left if self._visible else self._screen[0]
+        cy = max(h // 2, self.rect.height // 2)
+        self.edge.rect = pygame.Rect(edge_x - w, cy - h // 2, w, h)
+        self.edge.swipe_px = theme.px(EdgeHandle.SWIPE_PX)
+
     @property
     def rows(self) -> list[SliderRow]:
         return self.rows_by_tab[self.tab]
@@ -178,6 +211,7 @@ class SidePanel:
 
     def layout(self, screen_size: tuple[int, int], theme: Theme, bottom: int | None = None) -> None:
         self._theme = theme
+        self._screen = screen_size
         sw, sh = screen_size
         bottom = sh if bottom is None else bottom
         width = int(min(sw, max(theme.px(380), min(theme.px(520), sw * 0.36))))
@@ -205,6 +239,7 @@ class SidePanel:
 
         self.content_rect = pygame.Rect(self.rect.left, y, width, max(0, self.rect.bottom - y))
         self._layout_rows()
+        self._place_handle()
 
     def _layout_rows(self) -> None:
         theme = self._theme
@@ -239,6 +274,10 @@ class SidePanel:
 
     def handle(self, ev: PointerEvent) -> bool:
         if ev.kind == PointerKind.DOWN:
+            if self.handle_visible and self.edge.hit(ev.pos):
+                self.edge.pointer_down(ev)
+                self._captures[ev.pid] = self.edge
+                return True
             if not self.visible or not self.rect.collidepoint(ev.pos):
                 return False
             target: object = None
@@ -284,9 +323,22 @@ class SidePanel:
         self._captures.clear()
         self._scroll_start.clear()
 
+    def cancel_panel_widgets(self) -> None:
+        """Cancel captures on the panel's own controls, but not the edge tab."""
+        for pid, w in list(self._captures.items()):
+            if w is not self.edge:
+                if isinstance(w, Widget):
+                    w.pointer_cancel()
+                del self._captures[pid]
+                self._scroll_start.pop(pid, None)
+
     def draw(self, surface: pygame.Surface, theme: Theme) -> None:
-        if not self.visible:
-            return
+        if self._visible:
+            self._draw_panel(surface, theme)
+        if self.handle_visible:
+            self.edge.draw(surface, theme)
+
+    def _draw_panel(self, surface: pygame.Surface, theme: Theme) -> None:
         bg = pygame.Surface(self.rect.size, pygame.SRCALPHA)
         bg.fill(theme.panel_bg)
         surface.blit(bg, self.rect.topleft)

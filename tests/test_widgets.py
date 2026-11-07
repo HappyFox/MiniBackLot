@@ -220,3 +220,82 @@ def test_toolbar_drives_repeat_buttons(pg_display):
     tb.handle(ev(PointerKind.DOWN, b.rect.center, t=0))
     tb.update(1000)
     assert len(hits) == 2
+
+
+# ----------------------------------------------------------------------
+# Edge handle (chevron tab that opens/closes the panel)
+# ----------------------------------------------------------------------
+@pytest.fixture
+def closed_panel(panel_setup):
+    panel, st, theme, _ = panel_setup
+    panel.visible = False
+    toggles = []
+    panel.on_toggle = lambda: toggles.append(panel.visible)
+    return panel, toggles
+
+
+def tap(panel, pos, pid="h", t=0):
+    panel.handle(ev(PointerKind.DOWN, pos, t=t, pid=pid))
+    panel.handle(ev(PointerKind.UP, pos, t=t + 50, pid=pid))
+
+
+def test_handle_sits_on_screen_edge_when_closed_and_on_panel_when_open(closed_panel):
+    panel, _ = closed_panel
+    assert panel.edge.rect.right == 1280  # screen width in fixture
+    assert panel.edge.rect.width >= 48  # touch target
+    assert panel.edge.rect.bottom <= 500  # above the toolbar
+    panel.visible = True
+    assert panel.edge.rect.right == panel.rect.left
+
+
+def test_tap_handle_toggles_panel(closed_panel):
+    panel, toggles = closed_panel
+    tap(panel, panel.edge.rect.center)
+    assert panel.visible and toggles == [True]
+    tap(panel, panel.edge.rect.center)  # handle moved with the panel
+    assert not panel.visible and toggles == [True, False]
+
+
+def test_swipe_left_opens_swipe_right_closes(closed_panel):
+    panel, _ = closed_panel
+    x, y = panel.edge.rect.center
+    panel.handle(ev(PointerKind.DOWN, (x, y), pid="s"))
+    panel.handle(ev(PointerKind.MOVE, (x - 200, y), pid="s"))
+    panel.handle(ev(PointerKind.UP, (x - 200, y), pid="s"))
+    assert panel.visible
+    x, y = panel.edge.rect.center
+    # Swiping left again while open does nothing.
+    panel.handle(ev(PointerKind.DOWN, (x, y), pid="s"))
+    panel.handle(ev(PointerKind.UP, (x - 200, y), pid="s"))
+    assert panel.visible
+    panel.handle(ev(PointerKind.DOWN, (x, y), pid="s"))
+    panel.handle(ev(PointerKind.UP, (x + 200, y), pid="s"))
+    assert not panel.visible
+
+
+def test_long_press_on_handle_shows_hint_without_toggling(closed_panel):
+    panel, toggles = closed_panel
+    panel.edge.hint = "Adjustments"
+    pos = panel.edge.rect.center
+    panel.handle(ev(PointerKind.DOWN, pos, t=0, pid="l"))
+    assert panel.update(1000) == "Adjustments"
+    panel.handle(ev(PointerKind.UP, pos, t=1100, pid="l"))
+    assert not panel.visible and toggles == []
+
+
+def test_hidden_handle_is_not_hittable(closed_panel):
+    panel, _ = closed_panel
+    panel.handle_visible = False
+    assert not panel.handle(ev(PointerKind.DOWN, panel.edge.rect.center))
+    assert not panel.visible
+
+
+def test_handle_drawn_even_when_panel_closed(closed_panel, pg_display):
+    panel, _ = closed_panel
+    surf = pygame.Surface((1280, 600))
+    surf.fill((0, 0, 0))
+    panel.draw(surf, Theme())
+    assert surf.get_at(panel.edge.rect.center)[:3] != (0, 0, 0) or surf.get_at(
+        (panel.edge.rect.left + 6, panel.edge.rect.centery)
+    )[:3] != (0, 0, 0)
+    assert surf.get_at((100, 100))[:3] == (0, 0, 0)  # panel body not drawn

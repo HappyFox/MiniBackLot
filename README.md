@@ -51,7 +51,7 @@ read, never written.
 | Long-press on a button | Explain what the button does |
 
 The toolbar contains Prev/Next, Fit / Fill / 1:1, Flip H / Flip V, 0° (remove
-rotation), **Adjust**, Undo, Reset, **Lock**, Window/Full, **Hide** and Quit
+rotation), Undo, Reset, **Lock**, Window/Full, **Hide** and Quit
 (tap twice). Undo steps back through position *and* adjustment changes in the
 order you made them.
 
@@ -70,7 +70,11 @@ while a finger is on them or while the Adjust panel is open.
 
 ## Lighting and colour adjustments
 
-**Adjust** opens a side panel with two tabs:
+The **chevron tab** (‹‹) on the right edge of the screen opens the
+adjustment panel: tap it, or swipe left on it. When the panel is open, the
+tab rides along the panel's edge (››); tap it or swipe right to close (the
+panel's **Done** button and the `A` key also work). Like the other
+controls, the tab hides in photography mode. The panel has two tabs:
 
 | Light | Color |
 |---|---|

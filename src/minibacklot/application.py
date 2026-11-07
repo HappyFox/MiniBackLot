@@ -184,13 +184,6 @@ class Application:
                 hint="Remove rotation",
                 is_enabled=lambda: editable() and v.transform.rotation != 0,
             ),
-            Button(
-                "Adjust",
-                self.toggle_panel,
-                hint="Lighting and colour adjustments",
-                is_active=lambda: self.panel.visible,
-                width_units=1.2,
-            ),
             Button("Undo", self.undo, hint="Undo the last change", is_enabled=self.can_undo),
             Button("Reset", lambda: self._view_action(v.reset_all), hint="Fit, no rotation, no flips", is_enabled=editable),
             Button(
@@ -255,7 +248,15 @@ class Application:
             ),
             Button("Done", self.toggle_panel, hint="Close the adjustment panel", is_active=lambda: True),
         ]
-        return SidePanel("Adjust", tabs, header, long_press_ms=self.settings.touch.long_press_ms)
+        panel = SidePanel(
+            "Adjust",
+            tabs,
+            header,
+            long_press_ms=self.settings.touch.long_press_ms,
+            handle_hint="Lighting and colour adjustments (tap or swipe)",
+        )
+        panel.on_toggle = self._panel_toggled
+        return panel
 
     # ------------------------------------------------------------------
     # Run
@@ -552,11 +553,11 @@ class Application:
         self.dirty = True
 
     def toggle_panel(self) -> None:
-        self.panel.cancel()
-        self.panel.visible = not self.panel.visible
+        self.panel.toggle()
+
+    def _panel_toggled(self) -> None:
         if self.panel.visible:
             self.show_controls(pygame.time.get_ticks())
-            self.panel.layout(self.screen.get_size(), self.theme, self.toolbar.rect.top)
         self.dirty = True
 
     def _lock_toast(self, now: int) -> None:
@@ -588,6 +589,7 @@ class Application:
     def show_controls(self, now: int) -> None:
         self.controls_visible = True
         self.toolbar.visible = True
+        self.panel.handle_visible = True
         self.last_ui_t = now
         self.dirty = True
 
@@ -595,6 +597,7 @@ class Application:
         self.toolbar.cancel()
         self.panel.cancel()
         self.panel.visible = False
+        self.panel.handle_visible = False
         self.controls_visible = False
         self.toolbar.visible = False
         self.toast.clear()
